@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: agentforge
+      POSTGRES_USER: agentforge
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://agentforge:${DB_PASSWORD}@postgres:5432/agentforge
+      AI_SERVICE_URL: http://ai-service:8000
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: "7d"
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      PORT: "4000"
+      FRONTEND_URL: http://localhost:3000
+
+  ai-service:
+    build: ./ai-service
+    ports: ["8000:8000"]
+    depends_on: [postgres, redis]
+    env_file: ./ai-service/.env
+    environment:
+      BACKEND_URL: http://backend:4000/api
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+    volumes: [workspace:/app/workspace]
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:3000"]
+    depends_on: [backend]
+    env_file: ./frontend/.env.local
+
+volumes:
+  pgdata:
+  workspace:
